@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C.A.S.S.I.E. API 调用测试</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #101010;
+    --raised: #161616;
+    --control: #191919;
+    --border: rgba(255, 255, 255, 0.11);
+    --border-soft: rgba(255, 255, 255, 0.06);
+    --text: #f5f5f5;
+    --text-soft: rgba(255, 255, 255, 0.80);
+    --text-dim: rgba(255, 255, 255, 0.58);
+    --text-faint: rgba(255, 255, 255, 0.36);
+    --blue: #2f6bff;
+    --blue-bright: #5b8cff;
+    --blue-soft: rgba(75, 140, 255, 0.16);
+    --red: #e8402f;
+    --red-bright: #ff6b62;
+    --green-bright: #56d364;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 26px 20px 60px;
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.6 "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
+  h1::before { content: '■'; color: var(--blue); margin-right: 8px; font-size: 12px; }
+  .sub { color: var(--text-faint); font-size: 11px; letter-spacing: 1.6px; margin-bottom: 20px; }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 4px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .panel > .title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+    border-left: 2px solid var(--blue);
+    padding-left: 8px;
+    margin-bottom: 12px;
+  }
+  label { display: block; color: var(--text-dim); font-size: 12px; margin-bottom: 4px; }
+  input[type=text], input[type=number], textarea, select {
+    width: 100%;
+    padding: 7px 9px;
+    background: var(--control);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text);
+    font: inherit;
+    font-size: 12.5px;
+  }
+  textarea { min-height: 74px; resize: vertical; }
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 2px var(--blue-soft);
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button {
+    padding: 7px 15px;
+    background: var(--control);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-soft);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  button:hover { background: #232323; color: var(--text); }
+  button.primary { background: var(--blue); border-color: var(--blue-bright); color: #fff; font-weight: 600; }
+  button.primary:hover { background: var(--blue-bright); }
+  button.danger { border-color: rgba(255, 107, 98, 0.5); color: var(--red-bright); }
+  button.danger:hover { background: rgba(232, 64, 47, 0.16); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .checks { display: flex; flex-wrap: wrap; gap: 14px; }
+  .checks label { display: inline-flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
+  .checks input { accent-color: var(--blue); }
+  pre {
+    margin: 0;
+    padding: 11px 13px;
+    max-height: 340px;
+    overflow: auto;
+    background: #050505;
+    border: 1px solid var(--border-soft);
+    border-left: 3px solid var(--blue);
+    border-radius: 3px;
+    color: var(--text-soft);
+    font: 12px/1.7 Consolas, "Cascadia Mono", monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .statusline { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-size: 12px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); display: inline-block; }
+  .dot.on { background: var(--green-bright); }
+  .dot.busy { background: var(--blue-bright); }
+  .dot.err { background: var(--red-bright); }
+  .muted { color: var(--text-faint); }
+  .hint { color: var(--text-faint); font-size: 11.5px; margin-top: 6px; }
+  code { background: #050505; padding: 1px 5px; border-radius: 2px; color: var(--blue-bright); font-size: 11.5px; }
+  .settings-group { border-top: 1px solid var(--border-soft); padding-top: 11px; margin-top: 11px; }
+  .settings-group:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+  .settings-title {
+    font-size: 12px;
+    color: var(--text-soft);
+    margin-bottom: 9px;
+    letter-spacing: 0.4px;
+  }
+  .settings-title::before { content: '·'; color: var(--blue-bright); margin-right: 6px; font-weight: 700; }
+  .override-box {
+    border: 1px dashed var(--border);
+    border-radius: 3px;
+    padding: 0 12px 2px;
+    margin-top: 10px;
+  }
+  .override-box[disabled] { opacity: 0.4; }
+  .override-box[disabled] input, .override-box[disabled] select { cursor: not-allowed; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>C.A.S.S.I.E. API 调用测试</h1>
+  <div class="sub">API-ONLY BUILD · CALL TEST</div>
+
+  <div class="panel">
+    <div class="title">连接</div>
+    <div class="grid">
+      <div>
+        <label>API 地址</label>
+        <input type="text" id="baseUrl" value="http://127.0.0.1:8080">
+        <div class="hint" id="probeHint">正在探测…</div>
+      </div>
+      <div>
+        <label>API Key（可选，对应环境变量 CASSIE_API_KEY）</label>
+        <input type="text" id="apiKey" placeholder="留空则不发送">
+      </div>
+    </div>
+    <div class="hint">
+      本页是直接双击打开的本地文件，通过 CORS 调本机 API。API 版只监听本机，不要把它暴露到公网。
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="title">广播文本</div>
+    <label>文本（支持全部指令，例如 <code>[alert:Fire_Drill,start] … [alert:Fire_Drill,stop]</code>）</label>
+    <textarea id="text">attention , all unit report to the checkpoint . mtf epsilon 11 . move out .</textarea>
+    <div class="hint">
+      播放默认<b>完全使用服务器设置</b>。只有勾上下面的「本次调用覆盖」时，参数面板才会随请求发出。
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="title">本次调用覆盖（可选）</div>
+    <div class="checks">
+      <label><input type="checkbox" id="overrideOn"> 覆盖服务器设置（不勾则用服务器设置）</label>
+      <button id="btnFillParams" style="margin-left:auto">从服务器设置填入</button>
+    </div>
+    <div id="overrideBox" class="override-box" disabled>
+      <div class="grid" style="margin-top:10px">
+        <div>
+          <label>语速 speed</label>
+          <input type="number" id="speed" value="-10" step="1">
+        </div>
+        <div>
+          <label>音高 pitch</label>
+          <input type="number" id="pitch" value="1" step="0.05">
+        </div>
+        <div>
+          <label>空间效果耗时档 quality</label>
+          <select id="quality">
+            <option value="">不指定</option>
+            <option value="0">0（最精细）</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6（最省时）</option>
+          </select>
+        </div>
+        <div>
+          <label>空间模式</label>
+          <select id="spatialMode">
+            <option value="">不指定</option>
+            <option value="word">word（逐词）</option>
+            <option value="sentence">sentence（整句）</option>
+          </select>
+        </div>
+      </div>
+      <div class="checks" style="margin-top:12px">
+        <label><input type="checkbox" id="includeBell"> 广播铃声</label>
+        <label><input type="checkbox" id="enableSpecialBell"> 特殊铃声</label>
+        <label><input type="checkbox" id="enableNumberReading"> 数字朗读</label>
+      </div>
+      <div class="hint">「特殊铃声」需配合「广播铃声」使用。</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="title">服务器设置（/api/v1/settings）</div>
+    <div class="row" style="margin-bottom:12px">
+      <button id="btnLoadSettings">读取当前设置</button>
+      <button class="primary" id="btnApplySettings">应用并保存</button>
+      <button class="danger" id="btnResetSettings">恢复默认</button>
+      <span class="muted" id="settingsHint">—</span>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-title">广播</div>
+      <div class="grid">
+        <div>
+          <label>语速 speed</label>
+          <input type="number" id="sSpeed" step="1">
+        </div>
+        <div>
+          <label>音高 pitch</label>
+          <input type="number" id="sPitch" step="0.05">
+        </div>
+        <div>
+          <label>铃声前置时长 bell_lead_time（秒）</label>
+          <input type="number" id="sBellLead" step="1" min="0">
+        </div>
+        <div>
+          <label>铃声额外时长 bell_extra_duration（秒）</label>
+          <input type="number" id="sBellExtra" step="1" min="0">
+        </div>
+        <div>
+          <label>特殊铃声开头文件名</label>
+          <input type="text" id="sBellStart">
+        </div>
+        <div>
+          <label>特殊铃声结尾文件名</label>
+          <input type="text" id="sBellEnd">
+        </div>
+        <div>
+          <label>结巴时长 stutter_duration（秒）</label>
+          <input type="number" id="sStutter" step="0.01" min="0">
+        </div>
+        <div>
+          <label>空间效果耗时档 spatial_quality</label>
+          <select id="sQuality">
+            <option value="0">0（最精细）</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6（最省时）</option>
+          </select>
+        </div>
+        <div>
+          <label>空间模式 spatial_mode</label>
+          <select id="sSpatialMode">
+            <option value="word">word（逐词）</option>
+            <option value="sentence">sentence（整句）</option>
+          </select>
+        </div>
+      </div>
+      <div class="checks" style="margin-top:10px">
+        <label><input type="checkbox" id="sEnableNumberReading"> 数字朗读</label>
+        <label><input type="checkbox" id="sIncludeBell"> 广播铃声</label>
+        <label><input type="checkbox" id="sEnableSpecialBell"> 特殊铃声</label>
+        <label><input type="checkbox" id="sBroadcastEffect"> 空间效果</label>
+        <label><input type="checkbox" id="sVerboseMode"> 详细输出（播放日志）</label>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-title">音色处理</div>
+      <div class="grid">
+        <div>
+          <label>低切 low_cut_freq（Hz）</label>
+          <input type="number" id="sLowCut" step="10" min="0">
+        </div>
+        <div>
+          <label>高切 high_cut_freq（Hz）</label>
+          <input type="number" id="sHighCut" step="100" min="0">
+        </div>
+        <div>
+          <label>中频提升 mid_boost_gain（dB）</label>
+          <input type="number" id="sMidBoost" step="0.5">
+        </div>
+        <div>
+          <label>过载 overdrive_gain（dB）</label>
+          <input type="number" id="sOverdrive" step="0.5">
+        </div>
+        <div>
+          <label>削波阈值 clip_threshold</label>
+          <input type="number" id="sClip" step="100" min="0">
+        </div>
+        <div>
+          <label>压缩阈值 compressor_threshold（dB）</label>
+          <input type="number" id="sCompThreshold" step="1">
+        </div>
+        <div>
+          <label>压缩比 compressor_ratio</label>
+          <input type="number" id="sCompRatio" step="0.5" min="1">
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-title">混响</div>
+      <div class="grid">
+        <div>
+          <label>预延迟 reverb_pre_delay（ms）</label>
+          <input type="number" id="sPreDelay" step="1" min="0">
+        </div>
+        <div>
+          <label>房间大小 reverb_room_size</label>
+          <input type="number" id="sRoomSize" step="0.05" min="0">
+        </div>
+        <div>
+          <label>衰减时间 reverb_decay_time（秒）</label>
+          <input type="number" id="sDecay" step="0.1" min="0">
+        </div>
+        <div>
+          <label>阻尼 reverb_damping（Hz）</label>
+          <input type="number" id="sDamping" step="100" min="0">
+        </div>
+        <div>
+          <label>扩散 reverb_diffusion</label>
+          <input type="number" id="sDiffusion" step="0.01" min="0" max="1">
+        </div>
+        <div>
+          <label>尾部亮度 reverb_tail_brightness</label>
+          <input type="number" id="sTailBright" step="0.01" min="0" max="1">
+        </div>
+        <div>
+          <label>湿度 reverb_wet</label>
+          <input type="number" id="sWet" step="0.01" min="0" max="1">
+        </div>
+        <div>
+          <label>高频延伸 treble_stretch（Hz）</label>
+          <input type="number" id="sTrebleStretch" step="50" min="0">
+        </div>
+        <div>
+          <label>尾部增益 treble_tail_gain（dB）</label>
+          <input type="number" id="sTrebleTail" step="1">
+        </div>
+        <div>
+          <label>底噪音量 noise_volume（dB）</label>
+          <input type="number" id="sNoiseVolume" step="1">
+        </div>
+        <div>
+          <label>底噪类型 noise_type</label>
+          <select id="sNoiseType">
+            <option value="pink">pink</option>
+            <option value="white">white</option>
+            <option value="brown">brown</option>
+          </select>
+        </div>
+      </div>
+      <div class="checks" style="margin-top:10px">
+        <label><input type="checkbox" id="sReverbEnabled"> 混响开关</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="title">调用</div>
+    <div class="row">
+      <button class="primary" id="btnPlay">播放</button>
+      <button class="danger" id="btnStop">停止</button>
+      <button id="btnStatus">状态</button>
+      <button id="btnValidate">拼写检查</button>
+      <button id="btnPlan">时间线</button>
+      <button id="btnHealth">健康检查</button>
+      <button id="btnDoc">接口清单</button>
+      <button id="btnSettings">读设置</button>
+    </div>
+    <div class="statusline" style="margin-top:12px">
+      <span><span class="dot" id="playDot"></span> <span id="playState">未知</span></span>
+      <span class="muted">最近一次调用：<span id="lastCall">—</span></span>
+      <span class="muted">HTTP：<span id="lastStatus">—</span></span>
+    </div>
+    <div class="hint">
+      播放是异步的：<code>POST /api/v1/play</code> 返回 202 表示已开始，播放期间每秒自动查一次状态。
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="title">输出</div>
+    <pre id="out">就绪。</pre>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var pollTimer = 0;
+  var sawPlaying = false;
+  var idleStreak = 0;
+
+  function setOut(text) { $('out').textContent = text; }
+
+  function setStatus(code) {
+    $('lastStatus').textContent = code === null ? '—' : code;
+  }
+
+  function headers() {
+    var h = { 'Content-Type': 'application/json' };
+    var key = $('apiKey').value.trim();
+    if (key) h['X-API-Key'] = key;
+    return h;
+  }
+
+  function call(method, path, payload) {
+    var url = $('baseUrl').value.trim().replace(/\/+$/, '') + path;
+    $('lastCall').textContent = method + ' ' + path;
+    var opts = { method: method, headers: headers() };
+    if (payload !== undefined && payload !== null) opts.body = JSON.stringify(payload);
+    return fetch(url, opts).then(function (res) {
+      return res.text().then(function (raw) {
+        var data;
+        try { data = JSON.parse(raw); } catch (e) { data = raw; }
+        setStatus(res.status, res.ok);
+        return { status: res.status, ok: res.ok, data: data };
+      });
+    }).catch(function (err) {
+      setStatus(null, false);
+      return { status: 0, ok: false, data: { error: String(err), hint: '连不上？确认服务已启动、地址与端口正确' } };
+    });
+  }
+
+  function params() {
+    // 关键：覆盖参数必须是显式开启的。以前这里无条件把面板里的值发出去，
+    // 而面板是默认值（语速 -10、各开关不勾），于是每次调用都把服务器设置盖掉
+    // —— 表现就是「设置改了不生效、铃声怎么勾都不响」。
+    if (!$('overrideOn').checked) return {};
+    var p = {};
+    var speed = $('speed').value.trim();
+    var pitch = $('pitch').value.trim();
+    var quality = $('quality').value;
+    var mode = $('spatialMode').value;
+    if (speed !== '') p.speed = Number(speed);
+    if (pitch !== '') p.pitch = Number(pitch);
+    if (quality !== '') p.spatial_quality = Number(quality);
+    if (mode !== '') p.spatial_mode = mode;
+    p.include_bell = $('includeBell').checked;
+    p.enable_special_bell = $('enableSpecialBell').checked;
+    p.enable_number_reading = $('enableNumberReading').checked;
+    return p;
+  }
+
+  function syncOverrideBox() {
+    var on = $('overrideOn').checked;
+    $('overrideBox').disabled = !on;
+    $('btnPlay').title = on ? '本次调用将覆盖服务器设置' : '使用服务器设置播放';
+  }
+
+  // 设置面板：数值字段用 number，布尔用 checkbox
+  var SETTING_NUMBERS = ['speed', 'pitch', 'bell_lead_time', 'bell_extra_duration',
+    'stutter_duration', 'low_cut_freq', 'high_cut_freq', 'mid_boost_gain',
+    'overdrive_gain', 'clip_threshold', 'compressor_threshold', 'compressor_ratio',
+    'reverb_pre_delay', 'reverb_room_size', 'reverb_decay_time', 'reverb_damping',
+    'reverb_diffusion', 'reverb_tail_brightness', 'reverb_wet', 'treble_stretch',
+    'treble_tail_gain', 'noise_volume', 'spatial_quality'];
+  var SETTING_BOOLS = ['enable_number_reading', 'include_bell', 'enable_special_bell',
+    'broadcast_effect_enabled', 'reverb_enabled', 'verbose_mode'];
+  var SETTING_TEXTS = ['special_bell_start', 'special_bell_end', 'noise_type', 'spatial_mode'];
+  var SETTING_IDS = {
+    speed: 'sSpeed', pitch: 'sPitch', bell_lead_time: 'sBellLead',
+    bell_extra_duration: 'sBellExtra', special_bell_start: 'sBellStart',
+    special_bell_end: 'sBellEnd', stutter_duration: 'sStutter',
+    spatial_quality: 'sQuality', spatial_mode: 'sSpatialMode',
+    enable_number_reading: 'sEnableNumberReading', include_bell: 'sIncludeBell',
+    enable_special_bell: 'sEnableSpecialBell', broadcast_effect_enabled: 'sBroadcastEffect',
+    low_cut_freq: 'sLowCut', high_cut_freq: 'sHighCut', mid_boost_gain: 'sMidBoost',
+    overdrive_gain: 'sOverdrive', clip_threshold: 'sClip',
+    compressor_threshold: 'sCompThreshold', compressor_ratio: 'sCompRatio',
+    reverb_pre_delay: 'sPreDelay', reverb_room_size: 'sRoomSize',
+    reverb_decay_time: 'sDecay', reverb_damping: 'sDamping',
+    reverb_diffusion: 'sDiffusion', reverb_tail_brightness: 'sTailBright',
+    reverb_wet: 'sWet', treble_stretch: 'sTrebleStretch',
+    treble_tail_gain: 'sTrebleTail', noise_volume: 'sNoiseVolume',
+    reverb_enabled: 'sReverbEnabled', noise_type: 'sNoiseType',
+    verbose_mode: 'sVerboseMode'
+  };
+
+  function fillSettings(s) {
+    Object.keys(SETTING_IDS).forEach(function (key) {
+      var el = $(SETTING_IDS[key]);
+      if (!el || !(key in s)) return;
+      if (SETTING_BOOLS.indexOf(key) >= 0) el.checked = !!s[key];
+      else el.value = s[key];
+    });
+    $('settingsHint').textContent = '已载入 ' + Object.keys(s).length + ' 项';
+    $('settingsHint').style.color = 'var(--green-bright)';
+  }
+
+  function collectSettings() {
+    var out = {};
+    Object.keys(SETTING_IDS).forEach(function (key) {
+      var el = $(SETTING_IDS[key]);
+      if (!el) return;
+      if (SETTING_BOOLS.indexOf(key) >= 0) out[key] = el.checked;
+      else if (SETTING_NUMBERS.indexOf(key) >= 0) {
+        var v = parseFloat(el.value);
+        if (!isNaN(v)) out[key] = v;
+      } else out[key] = el.value;
+    });
+    return out;
+  }
+
+  function show(label, result) {
+    setOut(label + '\nHTTP ' + result.status + '\n\n' + JSON.stringify(result.data, null, 2));
+  }
+
+  function setPlayState(state) {
+    // state: 'idle' | 'building' | 'playing'
+    var dot = $('playDot');
+    dot.className = 'dot' + (state === 'playing' ? ' on' : (state === 'building' ? ' busy' : ''));
+    $('playState').textContent = state === 'playing' ? '播放中'
+      : (state === 'building' ? '准备中（正在合成音频）' : '空闲');
+  }
+
+  function pollOnce() {
+    call('GET', '/api/v1/status').then(function (r) {
+      var d = (r.data && r.data.data) || {};
+      // 服务端是「先构建整条时间线，再置 is_playing」。构建期间
+      // playing=false 但 play_lock_held=true —— 这段时间不能当成已结束，
+      // 否则带空间效果的长文本会在准备阶段就被判成播完。
+      if (d.playing) {
+        sawPlaying = true;
+        setPlayState('playing');
+        return;
+      }
+      if (d.play_lock_held) {
+        setPlayState('building');
+        return;
+      }
+      if (!sawPlaying) {
+        // 还没开始也没占锁：可能刚提交、线程尚未抢到锁，再等一轮
+        if (++idleStreak < 3) return;
+      }
+      setPlayState('idle');
+      stopPolling();
+    });
+  }
+
+  function startPolling() {
+    stopPolling();
+    sawPlaying = false;
+    idleStreak = 0;
+    setPlayState('building');
+    pollTimer = window.setInterval(pollOnce, 1000);
+    pollOnce();
+  }
+
+  $('overrideOn').addEventListener('change', function () {
+    syncOverrideBox();
+    if (this.checked) fillParamsFromSettings();
+  });
+
+  $('btnFillParams').addEventListener('click', fillParamsFromSettings);
+
+  function fillParamsFromSettings() {
+    call('GET', '/api/v1/settings').then(function (r) {
+      if (!r.data || !r.data.data) return;
+      var s = r.data.data.settings || r.data.data;
+      if ('speed' in s) $('speed').value = s.speed;
+      if ('pitch' in s) $('pitch').value = s.pitch;
+      if ('spatial_quality' in s) $('quality').value = String(s.spatial_quality);
+      if ('spatial_mode' in s) $('spatialMode').value = s.spatial_mode;
+      $('includeBell').checked = !!s.include_bell;
+      $('enableSpecialBell').checked = !!s.enable_special_bell;
+      $('enableNumberReading').checked = !!s.enable_number_reading;
+      $('out').textContent = '已把服务器当前设置填入覆盖面板。';
+    });
+  }
+
+  $('btnPlay').addEventListener('click', function () {
+    var payload = params();
+    payload.text = $('text').value;
+    call('POST', '/api/v1/play', payload).then(function (r) {
+      show('POST /api/v1/play', r);
+      if (r.ok) startPolling();
+    });
+  });
+
+  $('btnStop').addEventListener('click', function () {
+    call('POST', '/api/v1/stop', {}).then(function (r) {
+      show('POST /api/v1/stop', r);
+      // 停止是异步生效的（服务端只置标志，等当前片段播完才真的停），
+      // 所以这里不能停轮询，否则状态会永远停在「播放中」。
+      if (!pollTimer) {
+        idleStreak = 0;
+        pollTimer = window.setInterval(pollOnce, 1000);
+        pollOnce();
+      }
+    });
+  });
+
+  $('btnStatus').addEventListener('click', function () {
+    call('GET', '/api/v1/status').then(function (r) {
+      show('GET /api/v1/status', r);
+      var d = (r.data && r.data.data) || {};
+      setPlayState(d.playing ? 'playing' : (d.play_lock_held ? 'building' : 'idle'));
+    });
+  });
+
+  $('btnValidate').addEventListener('click', function () {
+    call('POST', '/api/v1/validate', { text: $('text').value })
+      .then(function (r) { show('POST /api/v1/validate', r); });
+  });
+
+  $('btnPlan').addEventListener('click', function () {
+    var payload = params();
+    payload.text = $('text').value;
+    call('POST', '/api/v1/plan', payload).then(function (r) { show('POST /api/v1/plan', r); });
+  });
+
+  $('btnHealth').addEventListener('click', function () {
+    call('GET', '/api/v1/health').then(function (r) { show('GET /api/v1/health', r); });
+  });
+
+  $('btnDoc').addEventListener('click', function () {
+    call('GET', '/api/v1').then(function (r) { show('GET /api/v1', r); });
+  });
+
+  $('btnSettings').addEventListener('click', function () {
+    call('GET', '/api/v1/settings').then(function (r) {
+      show('GET /api/v1/settings', r);
+      if (r.data && r.data.data) fillSettings(r.data.data.settings || r.data.data);
+    });
+  });
+
+  $('btnLoadSettings').addEventListener('click', function () {
+    call('GET', '/api/v1/settings').then(function (r) {
+      show('GET /api/v1/settings', r);
+      if (r.data && r.data.data) fillSettings(r.data.data.settings || r.data.data);
+    });
+  });
+
+  $('btnApplySettings').addEventListener('click', function () {
+    var payload = collectSettings();
+    call('POST', '/api/v1/settings', payload).then(function (r) {
+      show('POST /api/v1/settings', r);
+      if (r.ok) {
+        $('settingsHint').textContent = '已保存';
+        $('settingsHint').style.color = 'var(--green-bright)';
+      } else {
+        $('settingsHint').textContent = '保存失败';
+        $('settingsHint').style.color = 'var(--red-bright)';
+      }
+    });
+  });
+
+  $('btnResetSettings').addEventListener('click', function () {
+    if (!window.confirm('恢复默认设置？当前设置会被覆盖。')) return;
+    call('POST', '/api/v1/settings', { reset: true }).then(function (r) {
+      show('POST /api/v1/settings (reset)', r);
+      if (r.data && r.data.data) fillSettings(r.data.data.settings || r.data.data);
+    });
+  });
+
+  function stopPolling() {
+    if (pollTimer) { window.clearInterval(pollTimer); pollTimer = 0; }
+  }
+
+  // 自动探测：Windows 上 localhost 解析到 IPv6 的 ::1，而 127.0.0.1 是 IPv4，
+  // 两者是不同的地址。服务只绑其中一个时，写死的默认值就会连不上，
+  // 所以这里逐个试，挑第一个能通的。
+  function probe() {
+    var port = ($('baseUrl').value.match(/:(\d+)/) || [])[1] || '8080';
+    var candidates = ['http://127.0.0.1:' + port, 'http://localhost:' + port,
+                      'http://[::1]:' + port];
+    var current = $('baseUrl').value.trim().replace(/\/+$/, '');
+    if (candidates.indexOf(current) < 0) candidates.unshift(current);
+
+    $('probeHint').textContent = '正在探测…';
+    var i = 0;
+    function next() {
+      if (i >= candidates.length) {
+        $('probeHint').textContent = '没探测到服务：请先在 CASSIE API 目录运行 python cassie_play.py';
+        $('probeHint').style.color = 'var(--red-bright)';
+        return;
+      }
+      var base = candidates[i++];
+      fetch(base + '/api/v1/health', { method: 'GET' })
+        .then(function (res) { return res.ok ? base : Promise.reject(res.status); })
+        .then(function (base) {
+          $('baseUrl').value = base;
+          $('probeHint').textContent = '已连接：' + base;
+          $('probeHint').style.color = 'var(--green-bright)';
+          call('GET', '/api/v1/health').then(function (r) { show('启动自检 GET /api/v1/health', r); });
+          call('GET', '/api/v1/settings').then(function (r) {
+            if (r.data && r.data.data) fillSettings(r.data.data.settings || r.data.data);
+          });
+        })
+        .catch(function () { next(); });
+    }
+    next();
+  }
+
+  $('baseUrl').addEventListener('change', function () {
+    // 手动改地址后要重新确认，否则提示会停在上一次的探测结果上，看着像连上了
+    var base = this.value.trim().replace(/\/+$/, '');
+    if (!base) return;
+    $('probeHint').textContent = '正在确认 ' + base + ' …';
+    $('probeHint').style.color = 'var(--text-faint)';
+    fetch(base + '/api/v1/health', { method: 'GET' })
+      .then(function (res) { return res.ok ? base : Promise.reject(res.status); })
+      .then(function () {
+        $('probeHint').textContent = '已连接：' + base;
+        $('probeHint').style.color = 'var(--green-bright)';
+      })
+      .catch(function () {
+        $('probeHint').textContent = '连不上 ' + base + '：确认服务已启动、端口正确';
+        $('probeHint').style.color = 'var(--red-bright)';
+      });
+  });
+
+  probe();
+  syncOverrideBox();
+})();
+</script>
+</body>
+</html>

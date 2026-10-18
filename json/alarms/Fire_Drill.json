@@ -1,0 +1,31 @@
+{
+  "id": "Fire_Drill",
+  "name": "Fire Drill",
+  "loop": 3,
+  "tracks": [
+    {
+      "id": "t1",
+      "audio": "Alarm.wav",
+      "start_ms": 0,
+      "trim_start_ms": 0,
+      "trim_end_ms": null,
+      "volume_db": 0,
+      "speed": 1,
+      "fade_in_ms": 0,
+      "fade_out_ms": 0,
+      "loop": false
+    },
+    {
+      "id": "t2",
+      "audio": "new_heavy_alarm.wav",
+      "start_ms": 800,
+      "trim_start_ms": 0,
+      "trim_end_ms": 4000,
+      "volume_db": -6,
+      "speed": 1,
+      "fade_in_ms": 400,
+      "fade_out_ms": 800,
+      "loop": false
+    }
+  ]
+}

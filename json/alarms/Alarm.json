@@ -1,0 +1,33 @@
+{
+  "id": "Alarm",
+  "name": "Alarm",
+  "loop": 1,
+  "tracks": [
+    {
+      "id": "t1",
+      "audio": "Alarm.wav",
+      "channel": 0,
+      "start_ms": 0,
+      "trim_start_ms": 0,
+      "trim_end_ms": null,
+      "volume_db": 0,
+      "speed": 1,
+      "fade_in_ms": 0,
+      "fade_out_ms": 0,
+      "loop": false
+    },
+    {
+      "id": "t2",
+      "audio": "new_heavy_alarm.wav",
+      "channel": 0,
+      "start_ms": 0,
+      "trim_start_ms": 0,
+      "trim_end_ms": null,
+      "volume_db": 0,
+      "speed": 1,
+      "fade_in_ms": 1150,
+      "fade_out_ms": 0,
+      "loop": true
+    }
+  ]
+}
