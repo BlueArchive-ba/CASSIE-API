@@ -440,6 +440,9 @@ GITHUB_TOKEN = ""                                 # 私有仓库才需要
 2. 有 **GitHub Release** → 用最新 release 里的 `.zip` 资产（最省流量，推荐）
 3. 两者都没有 → 用 `main` 分支源码包（`codeload.github.com/.../zip/refs/heads/main`，能用但每次都要下整包）
 
+`version.json` 先走 GitHub API 读，读不到再退回 `raw.githubusercontent.com`
+（某些网络环境下 raw 会被拦，API 通常还能通）。
+
 发布新版本的流程：
 
 1. 改代码，把 `version.json` 的 `version` 和 `cassie_play.py` 的 `PROJECT_VERSION` 一起改

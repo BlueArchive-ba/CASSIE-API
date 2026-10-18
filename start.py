@@ -1,4 +1,5 @@
 import argparse
+import base64
 import http.server
 import json
 import os
@@ -262,8 +263,26 @@ def branch_zip_url(branch, repo=None):
         repo or UPDATE_REPO, branch or UPDATE_BRANCH or "main")
 
 
+def read_version_file(repo, branch):
+    try:
+        data = http_json(
+            "https://api.github.com/repos/{}/contents/version.json?ref={}".format(repo, branch),
+            headers=github_headers())
+        content = data.get("content") if isinstance(data, dict) else None
+        if content:
+            return json.loads(base64.b64decode(content).decode("utf-8"))
+        if isinstance(data, dict) and data.get("version"):
+            return data
+    except Exception:
+        pass
+    try:
+        return http_json("https://raw.githubusercontent.com/{}/{}/version.json".format(repo, branch))
+    except Exception:
+        return None
+
+
 def manifest_from_branch(repo, branch):
-    data = http_json("https://raw.githubusercontent.com/{}/{}/version.json".format(repo, branch))
+    data = read_version_file(repo, branch)
     if not isinstance(data, dict):
         return None
     version = str(data.get("version") or "").strip()
