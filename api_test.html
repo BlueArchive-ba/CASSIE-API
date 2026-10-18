@@ -438,9 +438,6 @@
   }
 
   function params() {
-    // 关键：覆盖参数必须是显式开启的。以前这里无条件把面板里的值发出去，
-    // 而面板是默认值（语速 -10、各开关不勾），于是每次调用都把服务器设置盖掉
-    // —— 表现就是「设置改了不生效、铃声怎么勾都不响」。
     if (!$('overrideOn').checked) return {};
     var p = {};
     var speed = $('speed').value.trim();
@@ -463,7 +460,6 @@
     $('btnPlay').title = on ? '本次调用将覆盖服务器设置' : '使用服务器设置播放';
   }
 
-  // 设置面板：数值字段用 number，布尔用 checkbox
   var SETTING_NUMBERS = ['speed', 'pitch', 'bell_lead_time', 'bell_extra_duration',
     'stutter_duration', 'low_cut_freq', 'high_cut_freq', 'mid_boost_gain',
     'overdrive_gain', 'clip_threshold', 'compressor_threshold', 'compressor_ratio',
@@ -522,7 +518,6 @@
   }
 
   function setPlayState(state) {
-    // state: 'idle' | 'building' | 'playing'
     var dot = $('playDot');
     dot.className = 'dot' + (state === 'playing' ? ' on' : (state === 'building' ? ' busy' : ''));
     $('playState').textContent = state === 'playing' ? '播放中'
@@ -532,9 +527,6 @@
   function pollOnce() {
     call('GET', '/api/v1/status').then(function (r) {
       var d = (r.data && r.data.data) || {};
-      // 服务端是「先构建整条时间线，再置 is_playing」。构建期间
-      // playing=false 但 play_lock_held=true —— 这段时间不能当成已结束，
-      // 否则带空间效果的长文本会在准备阶段就被判成播完。
       if (d.playing) {
         sawPlaying = true;
         setPlayState('playing');
@@ -545,7 +537,6 @@
         return;
       }
       if (!sawPlaying) {
-        // 还没开始也没占锁：可能刚提交、线程尚未抢到锁，再等一轮
         if (++idleStreak < 3) return;
       }
       setPlayState('idle');
@@ -596,8 +587,6 @@
   $('btnStop').addEventListener('click', function () {
     call('POST', '/api/v1/stop', {}).then(function (r) {
       show('POST /api/v1/stop', r);
-      // 停止是异步生效的（服务端只置标志，等当前片段播完才真的停），
-      // 所以这里不能停轮询，否则状态会永远停在「播放中」。
       if (!pollTimer) {
         idleStreak = 0;
         pollTimer = window.setInterval(pollOnce, 1000);
@@ -673,9 +662,6 @@
     if (pollTimer) { window.clearInterval(pollTimer); pollTimer = 0; }
   }
 
-  // 自动探测：Windows 上 localhost 解析到 IPv6 的 ::1，而 127.0.0.1 是 IPv4，
-  // 两者是不同的地址。服务只绑其中一个时，写死的默认值就会连不上，
-  // 所以这里逐个试，挑第一个能通的。
   function probe() {
     var port = ($('baseUrl').value.match(/:(\d+)/) || [])[1] || '8080';
     var candidates = ['http://127.0.0.1:' + port, 'http://localhost:' + port,
@@ -709,7 +695,6 @@
   }
 
   $('baseUrl').addEventListener('change', function () {
-    // 手动改地址后要重新确认，否则提示会停在上一次的探测结果上，看着像连上了
     var base = this.value.trim().replace(/\/+$/, '');
     if (!base) return;
     $('probeHint').textContent = '正在确认 ' + base + ' …';
