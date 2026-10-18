@@ -97,6 +97,8 @@ python cassie_play.py
 | `--no-server` | 更新完不启动服务（通知通道多保留 8 秒供游戏读最终状态） |
 | `--no-notify` | 不启动通知服务（游戏收不到消息） |
 | `--dry-run` | 只列出会写入哪些文件，不真正替换 |
+| `--version` | 打印本地 `version.json` 里的版本号后退出 |
+| `--pack [ZIP]` | 把代码打成更新包（默认 `dist/cassie-api-<版本>.zip`）后退出 |
 
 ### 3.4 服务监听地址
 
@@ -421,50 +423,70 @@ attention , all unit report to the checkpoint . mtf epsilon 11 . move out .
 
 ## 8. 自动更新
 
-### 8.1 配置（要你自己填）
+### 8.1 更新源（已配好，开箱可用）
 
-打开 `start.py`，顶部配置区填**其中一个**：
-
-**方式一（推荐）**：把清单文件放在仓库里，填它的地址
+`start.py` 顶部已经指向本仓库：
 
 ```python
-UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/你的用户名/仓库名/main/version.json"
+UPDATE_MANIFEST_URL = ""                          # 留空：不用自定义清单
+UPDATE_REPO = "BlueArchive-ba/CASSIE-API"         # 仓库
+UPDATE_BRANCH = "main"                            # 读 version.json 的分支
+GITHUB_TOKEN = ""                                 # 私有仓库才需要
 ```
 
-清单内容：
+检查更新时按这个顺序取：
+
+1. 分支上的 `version.json` 里**显式写了 `url`** → 直接用这个地址（仓库主人手动指定的发布方式）
+2. 有 **GitHub Release** → 用最新 release 里的 `.zip` 资产（最省流量，推荐）
+3. 两者都没有 → 用 `main` 分支源码包（`codeload.github.com/.../zip/refs/heads/main`，能用但每次都要下整包）
+
+发布新版本的流程：
+
+1. 改代码，把 `version.json` 的 `version` 和 `cassie_play.py` 的 `PROJECT_VERSION` 一起改
+2. `python start.py --pack` → 生成 `dist/cassie-api-<版本>.zip`（不含 `cassie/`、`alarms/` 与用户数据）
+3. 在 GitHub 建一个 tag 为 `v<版本>` 的 Release，把 zip 传上去
+4. 客户端下次 `python start.py` 就会看到新版本
+
+`version.json` 的完整格式（`url`、`notes` 都可省略）：
 
 ```json
 {
   "version": "1.2.0",
-  "url": "https://github.com/你的用户名/仓库名/releases/download/v1.2.0/cassie-api.zip",
+  "url": "https://github.com/BlueArchive-ba/CASSIE-API/releases/download/v1.2.0/cassie-api.zip",
   "notes": "这一版改了什么"
 }
 ```
 
-**方式二**：只填仓库，脚本走 GitHub Releases API
+想换更新源：把 `UPDATE_REPO` 改成别的 `用户名/仓库名`，或者只填
+`UPDATE_MANIFEST_URL` 指向任意一个清单文件。
 
-```python
-UPDATE_REPO = "你的用户名/仓库名"
-UPDATE_BRANCH = "main"      # 可选：先从该分支的 version.json 取下载地址
-GITHUB_TOKEN = ""           # 私有仓库才需要
-```
-
-> 两个都不填时，脚本会提示「还没配置更新源」，然后**照常启动服务**，不影响使用。
+> 一个都取不到时，脚本会提示「检查更新失败」，然后**照常启动服务**，不影响使用。
 
 ### 8.2 其它配置
 
 ```python
-NOTIFY_PORT = 8099      # 给游戏推送消息的端口，不要和 8080 冲突
-ASK_TIMEOUT = 120       # 询问等待秒数，超时视为不更新
-NOTIFY_GRACE = 8        # --check/--no-server 时通知通道多保留几秒
+NOTIFY_PORT = 8099
+ASK_TIMEOUT = 120
+NOTIFY_GRACE = 8
 PRESERVE = ("cassie", "alarms", "json/settings.json", "json/alarms")
 ```
 
+- `NOTIFY_PORT`：给游戏推送消息的端口，不要和 8080 冲突
+- `ASK_TIMEOUT`：询问等待秒数，超时视为不更新
+- `NOTIFY_GRACE`：`--check` / `--no-server` 时通知通道多保留几秒
+- `PRESERVE`：更新时原样保留的路径（见 8.4）
+
 ### 8.3 更新包怎么打包
 
-把要发布的内容打成一个 zip。**不要**把 `cassie/`（494 MB 音频）打进去 —— 更新时会保留它。
-GitHub 自动生成的源码归档（形如 `仓库名-main/...`）也能直接用，脚本会自动剥掉那层目录。
+```bash
+python start.py --pack                    # → dist/cassie-api-<版本>.zip
+python start.py --pack D:\out\cassie.zip  # 指定输出路径
+```
 
+`--pack` 会跳过 `cassie/`（494 MB 音频）、`alarms/`、`json/settings.json`、
+`json/alarms/`、`.git`、`__pycache__` 等，只打代码与文档（约 220 KB）。
+
+GitHub 自动生成的源码归档（形如 `仓库名-main/...`）也能直接用，脚本会自动剥掉那层目录。
 包里**必须**有 `cassie_play.py`，否则脚本会判定「不是 CASSIE 的包」并中止。
 
 ### 8.4 替换规则
@@ -481,7 +503,7 @@ GitHub 自动生成的源码归档（形如 `仓库名-main/...`）也能直接�
 
 | 保留项 | 为什么 |
 |---|---|
-| `cassie/` | 494 MB 音频，仓库里没有，更新包里也不该有 |
+| `cassie/` | 494 MB 音频，更新包里不该有，下载整包时也只会白白多占带宽 |
 | `alarms/` | 警报音频（约 25 MB），同上 |
 | `json/settings.json` | **对方的设置**，覆盖会重置 |
 | `json/alarms/` | **对方自己做的警报**，覆盖会丢失 |

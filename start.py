@@ -1,18 +1,3 @@
-"""C.A.S.S.I.E. API 版 开始脚本。
-
-职责：
-  1. 检查仓库有没有新版本
-  2. 有新版本 → 通知本地网页游戏 + 在控制台询问
-  3. 确认后下载、替换（保留 cassie 与用户数据）、再通知游戏
-  4. 启动 cassie_play.py
-
-用法：
-    python start.py              正常启动
-    python start.py --check      只检查更新，不启动服务
-    python start.py --update     跳过询问，直接更新
-    python start.py --no-server  更新完不启动服务
-"""
-
 import argparse
 import http.server
 import json
@@ -29,51 +14,29 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-# ============================================================================
-#  配置区 —— 需要你填的地方
-# ============================================================================
 
-# 【方式一，推荐】指向仓库里的版本清单，脚本读它拿到最新版本号和下载地址。
-#   清单格式（放在仓库里，例如 version.json）：
-#     { "version": "1.2.0",
-#       "url": "https://github.com/你/仓库/releases/download/v1.2.0/cassie-api.zip",
-#       "notes": "这次改了什么" }
 UPDATE_MANIFEST_URL = ""
 
-# 【方式二】只填仓库，脚本走 GitHub Releases API 取最新 release。
-#   例如 "leisiyu/cassie"。私有仓库还要填 GITHUB_TOKEN。
-UPDATE_REPO = ""
+UPDATE_REPO = "BlueArchive-ba/CASSIE-API"
 
-# 方式二用哪个分支的清单来判断（留空则只用 Releases 的 tag）
-UPDATE_BRANCH = ""
+UPDATE_BRANCH = "main"
 
-# 私有仓库需要的 token；公开仓库留空即可。
 GITHUB_TOKEN = ""
 
-# 给本地网页游戏推送更新消息的端口（不要和 CASSIE 的 8080 冲突）。
 NOTIFY_PORT = 8099
 
-# 更新时【不替换】的东西，相对路径，可以是文件或文件夹。
-#   cassie         —— 494 MB 音频素材，仓库里没有，必须留着
-#   alarms         —— 警报音频（24 MB），仓库里可能也没有
-#   json/settings.json / json/alarms —— 对方的设置和自定义警报，属于用户数据
-# 想严格按「除了 cassie 以外全部替换」，把这里改成 ("cassie",) 即可，
-# 但那样会清掉对方的设置与警报。
 PRESERVE = ("cassie", "alarms", "json/settings.json", "json/alarms")
 
-# 始终跳过（版本控制目录与缓存）。
 SKIP_NAMES = {".git", "__pycache__", ".venv", "venv", ".idea", ".vscode"}
 
-# 覆盖但不要先删（正在运行的脚本在 Windows 上删不掉，直接覆盖即可）。
 OVERWRITE_ONLY = {"start.py"}
 
-CHECK_TIMEOUT = 15          # 检查更新的网络超时（秒）
-DOWNLOAD_TIMEOUT = 60       # 下载超时（秒）
-ASK_TIMEOUT = 120           # 控制台询问等待多久（秒），超时视为不更新
-NOTIFY_GRACE = 8            # 不启动服务时，通知服务再保留多久（秒）供游戏读最终状态
-SERVER_PORT = 8080          # CASSIE 服务端口
+CHECK_TIMEOUT = 15
+DOWNLOAD_TIMEOUT = 60
+ASK_TIMEOUT = 120
+NOTIFY_GRACE = 8
+SERVER_PORT = 8080
 
-# ============================================================================
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 LOCAL_VERSION_FILE = PROJECT_ROOT / "version.json"
@@ -91,7 +54,6 @@ def log(message):
 
 
 def version_tuple(text):
-    """把 '1.2.3' 变成 (1, 2, 3) 以便比较；非数字部分忽略。"""
     parts = []
     for chunk in str(text or "").strip().lstrip("vV").split("."):
         digits = "".join(c for c in chunk if c.isdigit())
@@ -111,20 +73,7 @@ def read_local_version():
         return "0.0.0"
 
 
-# ---------------------------------------------------------------------------
-#  给网页游戏推送消息的本地服务
-# ---------------------------------------------------------------------------
-
 class UpdateNotifier:
-    """一个极小的 HTTP 服务，让本地网页游戏能实时收到更新状态。
-
-    接口：
-        GET  /status   当前状态（JSON），适合轮询
-        GET  /events   SSE 事件流，适合 EventSource 实时接收
-        GET  /         一张自检页，浏览器打开能看到是否连通
-        POST /decide   {"update": true|false} —— 让游戏替玩家做决定
-    """
-
     def __init__(self, port):
         self.port = port
         self.lock = threading.Lock()
@@ -170,7 +119,6 @@ class UpdateNotifier:
                 pass
 
     def wait_decision(self, timeout):
-        """等游戏通过 /decide 给答复；超时返回 None。"""
         if self.decision_event.wait(timeout):
             return self.decision
         return None
@@ -294,12 +242,10 @@ class UpdateNotifier:
                 pass
 
 
-# ---------------------------------------------------------------------------
-#  检查更新
-# ---------------------------------------------------------------------------
-
 def http_json(url, timeout=CHECK_TIMEOUT, headers=None):
-    request = urllib.request.Request(url, headers=headers or {})
+    merged = {"User-Agent": "cassie-updater", "Accept": "application/json"}
+    merged.update(headers or {})
+    request = urllib.request.Request(url, headers=merged)
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
@@ -311,51 +257,100 @@ def github_headers():
     return headers
 
 
+def branch_zip_url(branch, repo=None):
+    return "https://codeload.github.com/{}/zip/refs/heads/{}".format(
+        repo or UPDATE_REPO, branch or UPDATE_BRANCH or "main")
+
+
+def manifest_from_branch(repo, branch):
+    data = http_json("https://raw.githubusercontent.com/{}/{}/version.json".format(repo, branch))
+    if not isinstance(data, dict):
+        return None
+    version = str(data.get("version") or "").strip()
+    if not version:
+        return None
+    download = str(data.get("url") or data.get("download") or "").strip()
+    return {
+        "version": version,
+        "url": download or branch_zip_url(branch, repo),
+        "notes": str(data.get("notes") or "").strip(),
+        "source": "version.json 里的下载地址" if download else "分支源码包",
+        "explicit_url": bool(download),
+    }
+
+
+def manifest_from_release(repo, branch):
+    release = http_json("https://api.github.com/repos/{}/releases/latest".format(repo),
+                        headers=github_headers())
+    tag = str(release.get("tag_name") or "").strip()
+    version = tag.lstrip("vV")
+    if not version:
+        return None
+    download = ""
+    for asset in release.get("assets") or []:
+        candidate = str(asset.get("browser_download_url") or "")
+        if candidate.lower().endswith(".zip"):
+            download = candidate
+            break
+    if not download:
+        download = str(release.get("zipball_url") or "") or branch_zip_url(branch, repo)
+    return {
+        "version": version,
+        "url": download,
+        "notes": str(release.get("body") or "").strip(),
+        "source": "Releases {}".format(tag),
+        "explicit_url": False,
+    }
+
+
 def fetch_manifest():
-    """返回 {'version', 'url', 'notes'}，取不到返回 None。"""
     if UPDATE_MANIFEST_URL:
         data = http_json(UPDATE_MANIFEST_URL)
         return {
             "version": str(data.get("version") or "").strip(),
             "url": str(data.get("url") or data.get("download") or "").strip(),
             "notes": str(data.get("notes") or "").strip(),
+            "source": "自定义清单",
         }
 
-    if UPDATE_REPO:
-        # 先从分支上的 version.json 读下载地址，再退回 Releases 的 zip 包
-        raw = ""
-        if UPDATE_BRANCH:
-            raw = "https://raw.githubusercontent.com/{}/{}/version.json".format(
-                UPDATE_REPO, UPDATE_BRANCH)
-        if raw:
-            try:
-                data = http_json(raw)
-                url = str(data.get("url") or "").strip()
-                version = str(data.get("version") or "").strip()
-                if version and url:
-                    return {"version": version, "url": url,
-                            "notes": str(data.get("notes") or "").strip()}
-            except Exception:
-                pass
+    if not UPDATE_REPO:
+        return None
 
-        release = http_json(
-            "https://api.github.com/repos/{}/releases/latest".format(UPDATE_REPO),
-            headers=github_headers())
-        assets = release.get("assets") or []
-        url = assets[0].get("browser_download_url", "") if assets else ""
-        if not url:
-            url = release.get("zipball_url", "")
-        return {
-            "version": str(release.get("tag_name") or "").strip(),
-            "url": url,
-            "notes": str(release.get("body") or "").strip(),
-        }
+    branch = UPDATE_BRANCH or "main"
 
-    return None
+    branch_manifest = None
+    branch_error = None
+    try:
+        branch_manifest = manifest_from_branch(UPDATE_REPO, branch)
+    except Exception as error:
+        branch_error = error
+
+    release_manifest = None
+    release_error = None
+    try:
+        release_manifest = manifest_from_release(UPDATE_REPO, branch)
+    except Exception as error:
+        release_error = error
+
+    if branch_manifest and branch_manifest.get("explicit_url"):
+        return branch_manifest
+
+    def version_of(item):
+        return version_tuple(item["version"])
+
+    if branch_manifest and release_manifest:
+        return release_manifest if version_of(release_manifest) >= version_of(branch_manifest) \
+            else branch_manifest
+
+    picked = branch_manifest or release_manifest
+    if picked:
+        return picked
+
+    raise RuntimeError("version.json 与 Releases 都取不到（{} / {}）".format(
+        branch_error or "没有 version.json", release_error or "没有 release"))
 
 
 def check_for_update():
-    """返回 (manifest, error)；没有可用配置时 manifest 为 None 且 error 为提示语。"""
     if not UPDATE_MANIFEST_URL and not UPDATE_REPO:
         return None, ("还没配置更新源：请在 start.py 顶部填 UPDATE_MANIFEST_URL "
                       "或 UPDATE_REPO。")
@@ -364,17 +359,20 @@ def check_for_update():
     except urllib.error.HTTPError as error:
         if error.code == 404:
             return None, "更新源返回 404：地址或分支不对，或者仓库是私有的（需要 GITHUB_TOKEN）。"
+        if error.code in (403, 429):
+            return None, ("更新源拒绝请求（HTTP {}）：可能是 GitHub 限流、token 失效，"
+                          "或仓库未公开。").format(error.code)
         return None, "检查更新失败：HTTP {} {}".format(error.code, error.reason)
+    except urllib.error.URLError as error:
+        return None, "检查更新失败：连不上更新源（{}）。".format(error.reason)
     except Exception as error:
         return None, "检查更新失败：{}".format(error)
     if not manifest or not manifest.get("version"):
         return None, "更新源没有给出有效的版本号。"
+    if not manifest.get("url"):
+        return None, "更新源没有给出下载地址。"
     return manifest, None
 
-
-# ---------------------------------------------------------------------------
-#  下载与替换
-# ---------------------------------------------------------------------------
 
 def download(url, destination, notifier, headers=None):
     request = urllib.request.Request(url, headers=headers or {})
@@ -401,7 +399,6 @@ def download(url, destination, notifier, headers=None):
 
 
 def extract_package(archive, target):
-    """解压并把 GitHub 归档多出来的顶层目录剥掉。"""
     target.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(archive) as bundle:
         _safe_extract(bundle, target)
@@ -410,7 +407,6 @@ def extract_package(archive, target):
     if len(entries) == 1 and entries[0].is_dir():
         inner = entries[0]
         if (inner / SERVER_SCRIPT).exists():
-            # 形如 repo-main/... 的归档，把里面那层提上来
             staging = target.parent / (target.name + "_flat")
             if staging.exists():
                 shutil.rmtree(staging)
@@ -421,16 +417,10 @@ def extract_package(archive, target):
 
 
 def _skipped(relative):
-    """路径里只要有一段属于 SKIP_NAMES 就跳过。
-
-    不能靠 os.walk 的 dirs[:] 过滤：topdown=False 时子目录在 yield 之前就已经
-    递归完了，那样过滤拦不住 .git 里的文件，会把它们当垃圾删掉。
-    """
     return any(part in SKIP_NAMES for part in Path(relative).parts)
 
 
 def _preserved(relative, preserve):
-    """relative 本身被保留，或它是某个被保留路径的上级目录。"""
     low = str(relative).replace("\\", "/").strip("/").lower()
     if not low:
         return True
@@ -444,7 +434,6 @@ def _preserved(relative, preserve):
 
 
 def _safe_extract(bundle, target):
-    """解压前挡住路径穿越（zip 里带 ../ 或绝对路径）。"""
     target = Path(target).resolve()
     for member in bundle.infolist():
         name = member.filename.replace("\\", "/")
@@ -460,8 +449,6 @@ def apply_update(source, project, notifier, preserve=PRESERVE):
     if not (source / SERVER_SCRIPT).exists():
         raise RuntimeError("更新包里没有 {}，看起来不是 CASSIE 的包，已中止。".format(SERVER_SCRIPT))
 
-    # 暂存目录绝不能放在项目里面：删除步骤会清掉一切不在保留列表里的东西，
-    # 那样会先把暂存目录（连同刚解压出来的新文件）删掉，结果就是「全删了、啥也没写」。
     source_real = str(Path(source).resolve())
     project_real = str(Path(project).resolve())
     if source_real == project_real or source_real.startswith(project_real + os.sep):
@@ -470,7 +457,6 @@ def apply_update(source, project, notifier, preserve=PRESERVE):
     preserve = tuple(preserve)
     removed, copied, skipped = [], [], []
 
-    # 1) 删掉所有不该留的（自底向上，先文件后目录）
     for current, dirs, files in os.walk(project, topdown=False):
         current_path = Path(current)
         for name in files:
@@ -496,7 +482,6 @@ def apply_update(source, project, notifier, preserve=PRESERVE):
             except OSError as error:
                 skipped.append("{}（{}）".format(relative, error))
 
-    # 2) 拷贝新文件
     total_files = sum(len(files) for _, _, files in os.walk(source))
     done = 0
     for current, dirs, files in os.walk(source):
@@ -519,15 +504,35 @@ def apply_update(source, project, notifier, preserve=PRESERVE):
     return removed, copied, skipped
 
 
-# ---------------------------------------------------------------------------
-#  询问
-# ---------------------------------------------------------------------------
+def pack_release(destination=None, preserve=PRESERVE):
+    version = read_local_version()
+    target = Path(destination) if destination else \
+        PROJECT_ROOT / "dist" / "cassie-api-{}.zip".format(version)
+    if not target.is_absolute():
+        target = (PROJECT_ROOT / target).resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target_real = target.resolve()
+
+    count, size = 0, 0
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as bundle:
+        for current, dirs, files in os.walk(PROJECT_ROOT):
+            current_path = Path(current)
+            dirs[:] = [name for name in dirs
+                       if name not in SKIP_NAMES and name != "dist"]
+            for name in files:
+                path = current_path / name
+                relative = path.relative_to(PROJECT_ROOT)
+                if path.resolve() == target_real:
+                    continue
+                if _skipped(relative) or _preserved(relative, preserve):
+                    continue
+                bundle.write(path, str(relative).replace("\\", "/"))
+                count += 1
+                size += path.stat().st_size
+    return target, count, size
+
 
 def ask_update(notifier, manifest):
-    """控制台 + 游戏，两边谁先答都算。返回 True 表示更新。
-
-    只起一个读取线程：反复起线程去抢 input() 会互相干扰。
-    """
     notifier.decision_event.clear()
     notifier.decision = None
     notifier.set_state(stage="update_available",
@@ -546,8 +551,6 @@ def ask_update(notifier, manifest):
         try:
             holder["text"] = input("要现在更新吗？[y/N]（游戏里也能回答，回车=跳过） ")
         except EOFError:
-            # 没有交互式控制台（stdin 被重定向、被脚本拉起等）。
-            # 这不能当成「玩家说了不」，否则游戏那边的答复永远轮不上。
             holder["eof"] = True
         except KeyboardInterrupt:
             holder["text"] = ""
@@ -570,10 +573,6 @@ def ask_update(notifier, manifest):
     return False
 
 
-# ---------------------------------------------------------------------------
-#  主流程
-# ---------------------------------------------------------------------------
-
 def run_server():
     log("启动 CASSIE 服务：{}".format(SERVER_SCRIPT))
     return subprocess.Popen([sys.executable, SERVER_SCRIPT], cwd=str(PROJECT_ROOT))
@@ -586,7 +585,21 @@ def main():
     parser.add_argument("--no-server", action="store_true", help="更新完不启动服务")
     parser.add_argument("--no-notify", action="store_true", help="不启动通知服务")
     parser.add_argument("--dry-run", action="store_true", help="只显示会删改哪些文件")
+    parser.add_argument("--version", action="store_true", help="只打印本地版本号后退出")
+    parser.add_argument("--pack", nargs="?", const="", metavar="ZIP",
+                        help="把代码打成更新包（不含 cassie/、alarms/ 与用户数据）后退出")
     args = parser.parse_args()
+
+    if args.version:
+        print(read_local_version())
+        return 0
+
+    if args.pack is not None:
+        target, count, size = pack_release(args.pack or None)
+        log("打包完成：{}（{} 个文件，{:.1f} KB）".format(
+            target, count, size / 1024))
+        log("把 zip 上传到 GitHub Release 作为资产，版本号就是 version.json 里的值。")
+        return 0
 
     log("目录：{}".format(PROJECT_ROOT))
     log("本地版本：{}".format(read_local_version()))
@@ -608,8 +621,8 @@ def main():
                                latest_version=manifest["version"],
                                message="已是最新版本")
         else:
+            log("更新源：{}（{}）".format(manifest["url"], manifest.get("source") or "未知来源"))
             if args.check:
-                # --check 只报告，不询问也不更新
                 log("发现新版本 {}（当前 {}）。运行 python start.py 即可更新。".format(
                     manifest["version"], read_local_version()))
                 notifier.set_state(stage="update_available",
@@ -623,7 +636,6 @@ def main():
                     log("已跳过更新。")
                 else:
                     notifier.set_state(stage="updating", percent=0, message="开始更新")
-                    # 下载与解压都在系统临时目录里做，不放进项目目录
                     work_dir = Path(tempfile.mkdtemp(prefix="cassie_update_"))
                     archive = work_dir / "update.zip"
                     staging = work_dir / "staging"
@@ -669,7 +681,6 @@ def main():
                         shutil.rmtree(work_dir, ignore_errors=True)
 
         if args.check or args.no_server:
-            # 不启动服务时不要把进程永久挂住：留一小段时间让游戏读到最终状态就退出
             if not args.no_notify:
                 log("通知服务再保留 {} 秒供游戏读取最终状态，然后退出。".format(NOTIFY_GRACE))
                 time.sleep(NOTIFY_GRACE)

@@ -1,0 +1,9 @@
+* text=auto eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.wav binary
+*.ogg binary
+*.mp3 binary
+*.zip binary

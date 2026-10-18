@@ -43,8 +43,6 @@ ALERT_BLOCK_RE = re.compile(r'\[(?:alert|alart):([^\],]+)\s*,\s*(start|stop)\]',
 API_VERSION = 'v1'
 API_PREFIX = '/api/v1'
 
-# 必须绑定 IPv4 字面量，不能写 'localhost'：Windows 上 localhost 只解析到
-# IPv6 的 ::1，于是浏览器/curl/客户端用 127.0.0.1 全都连不上，报 Failed to fetch。
 API_HOST = '127.0.0.1'
 PROJECT_VERSION = '1.1.0'
 
@@ -64,7 +62,6 @@ SUPPORTED_LANGUAGES = ('zh', 'en')
 DEFAULT_LANGUAGE = 'zh'
 
 def normalize_language(value):
-    
     if value is None:
         return None
     text = str(value).strip().lower().replace('_', '-')
@@ -242,16 +239,13 @@ _REQUEST_LANG = threading.local()
 _PROCESS_LANGUAGE = normalize_language(os.environ.get('CASSIE_LANG')) or DEFAULT_LANGUAGE
 
 def current_language():
-    
     language = getattr(_REQUEST_LANG, 'value', None)
     return language if language in SUPPORTED_LANGUAGES else _PROCESS_LANGUAGE
 
 def set_language(value):
-    
     _REQUEST_LANG.value = normalize_language(value) or DEFAULT_LANGUAGE
 
 def language_from_request():
-    
     for value in (request.query.get('lang'), request.headers.get('X-Cassie-Lang')):
         if value is None or not str(value).strip():
             continue
@@ -260,16 +254,13 @@ def language_from_request():
 
 @hook('before_request')
 def _write_request_language():
-    
     set_language(language_from_request())
 
 def language_join(items, zh_separator=' 或 ', en_separator=' or '):
-    
     separator = zh_separator if current_language() == DEFAULT_LANGUAGE else en_separator
     return separator.join(items)
 
 def tr(key, **kwargs):
-    
     template = (MESSAGES.get(current_language()) or {}).get(key)
     if template is None:
         template = MESSAGES[DEFAULT_LANGUAGE].get(key)
@@ -428,7 +419,6 @@ class CASSIETerminal:
 
 
     def load_settings(self):
-        
         if not os.path.exists(self.settings_file):
             return {}
         try:
@@ -445,7 +435,6 @@ class CASSIETerminal:
                 if key in API_MUTABLE_FIELDS}
 
     def save_settings(self):
-        
         payload = {key: getattr(self, key, SYNTHESIS_PARAM_DEFAULTS.get(key))
                    for key in API_MUTABLE_FIELDS}
         try:
@@ -456,7 +445,6 @@ class CASSIETerminal:
             return False, str(error)
 
     def apply_stored_settings(self):
-        
         stored = self.load_settings()
         for key, value in stored.items():
             if key in ('spatial_quality',):
@@ -471,7 +459,6 @@ class CASSIETerminal:
         if not os.path.exists(filepath):
             return 0
         try:
-
             with contextlib.closing(wave.open(filepath, 'r')) as f:
                 frames = f.getnframes()
                 rate = f.getframerate()
@@ -505,7 +492,6 @@ class CASSIETerminal:
         return False
 
     def generate_noise(self, duration_ms, sample_rate=44100, channels=1, sample_width=2, noise_type='pink'):
-
         num_samples = int(duration_ms * sample_rate / 1000)
         if noise_type == 'pink':
             noise = cn.powerlaw_psd_gaussian(1, num_samples)
@@ -524,7 +510,6 @@ class CASSIETerminal:
         )
 
     def generate_treble_tail(self, audio):
-        
         duration_ms = max(0.0, float(self.treble_stretch))
         if duration_ms <= 0 or len(audio) < 20:
             return AudioSegment.empty()
@@ -646,7 +631,6 @@ class CASSIETerminal:
 
     @classmethod
     def quality_profile(cls, level):
-        
         try:
             index = int(level)
         except (TypeError, ValueError):
@@ -655,12 +639,10 @@ class CASSIETerminal:
         return cls.SPATIAL_QUALITY_LEVELS[index]
 
     def spatial_profile(self):
-        
         return self.quality_profile(getattr(self, 'spatial_quality', 0))
 
     @staticmethod
     def _build_hadamard(size):
-        
         matrix = np.ones((1, 1), dtype=np.float64)
         while matrix.shape[0] < size:
             matrix = np.block([[matrix, matrix], [matrix, -matrix]])
@@ -668,14 +650,12 @@ class CASSIETerminal:
 
     @staticmethod
     def _fft_convolve(signal, impulse):
-        
         total = len(signal) + len(impulse) - 1
         size = 1 << max(1, int(total - 1).bit_length())
         spectrum = np.fft.rfft(signal, size) * np.fft.rfft(impulse, size)
         return np.fft.irfft(spectrum, size)[:total]
 
     def _prepare_fdn(self, frame_rate, channel):
-        
         delay_lines = np.asarray(self.FDN_DELAY_LINES, dtype=np.float64)
         count = len(delay_lines)
         if channel > 0:
@@ -725,7 +705,6 @@ class CASSIETerminal:
                 round(float(np.clip(self.reverb_diffusion, 0.0, 1.0)), 2))
 
     def _fdn_parameters(self, frame_rate, channel):
-        
         key = self._fdn_key(frame_rate, channel)
         cached = self._reverb_cache.get(key)
         if cached is None:
@@ -737,7 +716,6 @@ class CASSIETerminal:
 
     def _run_fdn(self, source, params, *, inject_burst=False, tail_samples=None,
                  collect_energy=False):
-        
         delays = params['delays']
         count = params['count']
         max_delay = params['max_delay']
@@ -810,7 +788,6 @@ class CASSIETerminal:
 
     @staticmethod
     def damping_ratio(damping_hz):
-        
         try:
             value = float(damping_hz)
         except (TypeError, ValueError):
@@ -820,7 +797,6 @@ class CASSIETerminal:
 
     @staticmethod
     def _solve_damping(target_ratio):
-        
         pole = float(CASSIETerminal.FDN_DAMPING_POLE)
         if target_ratio >= 1.0:
             return 0.0, pole
@@ -835,7 +811,6 @@ class CASSIETerminal:
 
     def _generate_fdn_tail(self, frame_rate, channel, room_size, decay, damping, diffusion,
                            collect_energy=False):
-        
         for key, value in (('reverb_room_size', room_size),
                            ('reverb_decay_time', decay),
                            ('reverb_damping', damping),
@@ -848,7 +823,6 @@ class CASSIETerminal:
                              tail_samples=total, collect_energy=True)
 
     def apply_room_reverb(self, audio, wet=None):
-        
         if len(audio) == 0 or audio.sample_width != 2:
             return audio
         wet_gain = float(np.clip(self.reverb_wet if wet is None else wet, 0.0, 1.0))
@@ -921,7 +895,6 @@ class CASSIETerminal:
 
     @staticmethod
     def _soft_limit(samples, ceiling):
-        
         knee = ceiling * 0.78
         magnitude = np.abs(samples)
         if magnitude.size == 0 or float(np.max(magnitude)) <= knee:
@@ -981,13 +954,11 @@ class CASSIETerminal:
                     noise = noise.set_channels(2)
                 audio = audio.overlay(noise, position=0, gain_during_overlay=0)
         except Exception as e:
-
             traceback.print_exc()
             return audio
         return audio
 
     def _prepare_audio(self, audio, pitch=1.0, speed=0, apply_effects=True):
-        
         if pitch != 1.0:
             new_frame_rate = int(audio.frame_rate * pitch)
             audio = audio._spawn(audio.raw_data, overrides={'frame_rate': new_frame_rate})
@@ -1010,7 +981,6 @@ class CASSIETerminal:
 
     @staticmethod
     def load_audio(path, fmt='wav'):
-        
         with open(path, 'rb') as handle:
             if fmt == 'wav':
                 return AudioSegment.from_wav(handle)
@@ -1018,7 +988,6 @@ class CASSIETerminal:
 
     @staticmethod
     def export_audio(audio, path, fmt='wav'):
-        
         exported = audio.export(path, format=fmt)
         try:
             exported.close()
@@ -1158,7 +1127,6 @@ class CASSIETerminal:
 
     @classmethod
     def render_sample_name(cls, name):
-        
         text = str(name)
         if text in cls.SAMPLE_LABELS:
             return cls.SAMPLE_LABELS[text]
@@ -1172,12 +1140,10 @@ class CASSIETerminal:
 
     @classmethod
     def spoken_label(cls, item_type, word):
-        
         return ' '.join(cls.spoken_parts(item_type, word))
 
     @classmethod
     def spoken_offsets(cls, event, pieces):
-        
         count = len(pieces)
         if count == 0:
             return []
@@ -1200,7 +1166,6 @@ class CASSIETerminal:
 
     @classmethod
     def spoken_parts(cls, item_type, word):
-        
         if item_type == 'number':
             parts = word if isinstance(word, (list, tuple)) else [word]
             return [cls.render_sample_name(part) for part in parts]
@@ -1503,7 +1468,6 @@ class CASSIETerminal:
         return {'queue': queue, 'errors': errors}
 
     def render_alarm_track(self, track):
-        """把一条音轨按「裁剪 → 变速 → 音量 → 淡入淡出」处理成音频。"""
         name = os.path.basename(str(track.get('audio') or '').strip())
         if not name:
             return None
@@ -1545,11 +1509,6 @@ class CASSIETerminal:
 
     @staticmethod
     def _pick_alarm_channel(events, start_ms):
-        """给一条警报挑一个空闲的专用通道（9-12），支持四条警报同时响。
-
-        这些通道不参与 [channel] 指令的分配，所以正文永远抢不到它们；
-        判断「忙」用的是该通道上最后一个警报事件的结束时刻。
-        """
         busy_until = 0
         used = set()
         for event in events:
@@ -1566,16 +1525,6 @@ class CASSIETerminal:
         return None
 
     def render_alarm(self, events, alarm, start_ms, window_ms, channel):
-        """把一条警报的所有音轨**混成一条**音频，再作为单个事件叠到 channel 上。
-
-        必须先在服务端混音：pygame 一个声道同一时刻只能播一个 Sound，如果按
-        音轨逐条提交事件，后一条会把前一条打断——听感就是几条音轨在时间上
-        「各占一半」，而不是编辑器里听到的叠加效果。
-
-        警报按自身长度播完为止（不再拉长去填满块）；块内的正文只起「最晚放到
-        这里」的作用，真正的掐断由 _clamp_alarms() 按正文总长做。单轨 loop 为真
-        时该轨在这段里平铺，适合「背景警报一直响、进度报告只播一次」这类组合。
-        """
         prepared = []
         for track in (alarm.get('tracks') or []):
             if not isinstance(track, dict):
@@ -1638,11 +1587,6 @@ class CASSIETerminal:
 
     @staticmethod
     def _clamp_alarms(events):
-        """正文播完还没结束的警报直接掐断。
-
-        正文结束时刻按「不含警报的事件」算，所以警报不会反过来把广播拉长；
-        被掐到零长度的警报事件直接丢弃。
-        """
         speech_end = max((event['end_ms'] for event in events
                           if not event.get('is_alarm')), default=0)
         if speech_end <= 0:
@@ -1684,7 +1628,6 @@ class CASSIETerminal:
             return audio if len(audio) else None
 
         def piece_durations_ms(words):
-            
             spans = []
             for word in words if isinstance(words, (list, tuple)) else [words]:
                 filepath = os.path.join(AUDIO_BASE_PATH, word + AUDIO_EXTENSION)
@@ -1845,11 +1788,9 @@ class CASSIETerminal:
                 'content_ms': int(content_ms), 'duration_ms': int(max(content_ms, duration_ms))}
 
     def uses_sentence_processing(self):
-        
         return getattr(self, 'spatial_mode', 'word') == 'sentence'
 
     def spatial_active(self):
-        
         return bool(self.broadcast_effect_enabled
                     and self.reverb_enabled
                     and self.reverb_wet > 0)
@@ -1872,7 +1813,6 @@ class CASSIETerminal:
         return state
 
     def begin_progress(self, total_units, callback):
-        
         state = self._progress_state()
         state['callback'] = callback
         state['total'] = max(0, int(total_units))
@@ -1881,7 +1821,6 @@ class CASSIETerminal:
         state['percent'] = 0
 
     def set_progress_stage(self, stage, total_units=None):
-        
         state = self._progress_state()
         state['stage'] = stage
         if total_units is not None:
@@ -1895,14 +1834,12 @@ class CASSIETerminal:
         self._emit_progress()
 
     def _set_progress_position(self, done, total):
-        
         state = self._progress_state()
         state['done'] = int(done)
         state['total'] = max(1, int(total))
         self._emit_progress()
 
     def estimate_preprocess_event(self, text):
-        
         span = self.PROGRESS_SPANS['reverb']
         if not self.spatial_active():
             return {'type': 'progress', 'stage': 'reverb', 'done': 0, 'total': 0,
@@ -1916,7 +1853,6 @@ class CASSIETerminal:
                 'estimated': True}
 
     def progress_percent(self, stage, done, total):
-        
         start, end = self.PROGRESS_SPANS.get(stage, (0, 100))
         if total > 0:
             ratio = min(1.0, max(0.0, float(done) / float(total)))
@@ -1952,7 +1888,6 @@ class CASSIETerminal:
         state['percent'] = 0
 
     def _append_tail_marker(self, events, content_end, tail_end):
-        
         if tail_end <= content_end:
             return events
         events.append({
@@ -1967,7 +1902,6 @@ class CASSIETerminal:
 
     @staticmethod
     def timeline_bounds(events):
-        
         real = [event for event in events if not event.get('silent')]
         content_end = max((event['end_ms'] for event in real), default=0)
         tail_end = max((event['start_ms'] + event.get('audio_length_ms', len(event['audio']))
@@ -1975,7 +1909,6 @@ class CASSIETerminal:
         return content_end, max(content_end, tail_end)
 
     def apply_reverb_to_events(self, events):
-        
         if not self.spatial_active() or not events:
             return events
 
@@ -2000,7 +1933,6 @@ class CASSIETerminal:
         return self._append_tail_marker(events, content_end, tail_end)
 
     def _mix_channel(self, events, channel, frame_rate, total_ms):
-        
         track = AudioSegment.silent(duration=total_ms, frame_rate=frame_rate).set_sample_width(2)
         for event in events:
             if event['channel'] != channel or len(event['audio']) == 0:
@@ -2010,7 +1942,6 @@ class CASSIETerminal:
         return track
 
     def _apply_sentence_processing(self, events):
-        
         frame_rate = int(self._audio_frame_rate(events))
         content_end = max((event['end_ms'] for event in events), default=0)
         if content_end <= 0:
@@ -2441,7 +2372,7 @@ class CASSIETerminal:
             current_channel = self.word_channel
             total_words = len([item for item in full_queue if item[0] in ('word', 'number', 'stutter')])
             word_index = 0
-            
+
             for item in full_queue:
                 if self.stop_requested:
                     break
@@ -2558,7 +2489,6 @@ class CASSIETerminal:
             cursor = 0
 
             def due_logs(before_ms):
-                
                 nonlocal cursor
                 while cursor < len(schedule) and schedule[cursor][0] <= before_ms:
                     at_ms, text = schedule[cursor]
@@ -2582,9 +2512,6 @@ class CASSIETerminal:
                    "started_at": int(playback_start * 1000),
                    "is_playback": True}
 
-            # 铃声要单独先起：它排在时间线最前面却比正文长得多，
-            # 若放进下面的逐事件循环里等它，正文就得等铃声放完才开始。
-            # 这里异步启动，让正文照自己的时间轴走，最后统一等各通道播完。
             for event in playable:
                 if event['channel'] != self.bell_channel:
                     continue
@@ -2601,7 +2528,6 @@ class CASSIETerminal:
                 if self.stop_requested:
                     break
                 if event['channel'] == self.bell_channel:
-                    # 上面已经起过了，这里只补日志，不能再放一次
                     for entry in due_logs(int(event['start_ms'])):
                         yield entry
                     continue
@@ -2629,8 +2555,6 @@ class CASSIETerminal:
                 for entry in due_logs(float('inf')):
                     yield entry
 
-            # 等剩余音频播完，但要随时能被 stop 打断：铃声可能有几十秒，
-            # 不能因为等它就让「停止」命令卡住不动。
             while not self.stop_requested:
                 remaining = max(channel_ready.values(),
                                 default=time.monotonic()) - time.monotonic()
@@ -2666,7 +2590,6 @@ class CASSIETerminal:
     def _export_from_queue_unlocked(self, text, output_path, include_bell=False, device=None,
                                     pitch=1.0, speed=-10, enable_number_reading=False,
                                     enable_special_bell=False):
-        
         if not text:
             return False, tr('nothing_to_export')
         self.set_progress_stage('parse')
@@ -2701,7 +2624,7 @@ class CASSIETerminal:
             return False, tr('wav_write_failed', error=error)
         self._emit_progress(force_percent=100)
         return True, output_path
-    
+
     def process_audio_with_pitch(self, filepath, pitch):
         if pitch == 1.0:
             return filepath
@@ -2715,14 +2638,12 @@ class CASSIETerminal:
         return export_path
 
     def snapshot_settings(self):
-        
         snapshot = {}
         for field in API_MUTABLE_FIELDS:
             snapshot[field] = getattr(self, field, SYNTHESIS_PARAM_DEFAULTS.get(field))
         return snapshot
 
     def merged_settings(self, overrides=None):
-        
         snapshot = self.snapshot_settings()
         for key, value in (overrides or {}).items():
             if key in API_MUTABLE_FIELDS and value is not None:
@@ -2731,7 +2652,6 @@ class CASSIETerminal:
 
     @contextlib.contextmanager
     def settings_snapshot(self, overrides=None):
-        
         settings = self.merged_settings(overrides)
         with self.settings_lock:
             backup = self.snapshot_settings()
@@ -2744,11 +2664,9 @@ class CASSIETerminal:
                     setattr(self, key, value)
 
     def list_words(self):
-        
         return sorted(self.word_set)
 
     def list_sounds(self):
-        
         names = set()
         for base in (SOUND_BASE_PATH, AUDIO_BASE_PATH):
             if not os.path.isdir(base):
@@ -2759,7 +2677,6 @@ class CASSIETerminal:
         return sorted(names)
 
     def library_status(self):
-        
         words_dir = [f for f in os.listdir(AUDIO_BASE_PATH)
                      if f.lower().endswith(AUDIO_EXTENSION)] if os.path.isdir(AUDIO_BASE_PATH) else []
         sounds_dir = [f for f in os.listdir(SOUND_BASE_PATH)
@@ -2778,12 +2695,10 @@ class CASSIETerminal:
         }
 
     def validate_text(self, text):
-        
         not_found = self.check_spelling(text or '')
         return {'text': text or '', 'not_found': not_found, 'ok': not not_found}
 
     def plan_broadcast(self, text, overrides=None):
-        
         with self.settings_snapshot(overrides) as settings:
             started = time.monotonic()
             plan = self.interpret_broadcast_text(
@@ -2823,7 +2738,6 @@ class CASSIETerminal:
         }
 
     def synthesize(self, text, output_path=None, overrides=None, filename=None):
-        
         if not text or not text.strip():
             return False, tr('content_empty'), {}
 
@@ -2864,7 +2778,6 @@ class CASSIETerminal:
             }
 
     def start_playback(self, text, overrides=None):
-        
         if not text or not text.strip():
             return False, tr('content_empty')
         if self.is_playing:
@@ -2885,13 +2798,11 @@ class CASSIETerminal:
         return True, ''
 
     def stop_playback(self):
-        
         self.stop_requested = True
         self.stop_all_audio()
         return True
 
     def health(self):
-        
         status = self.library_status()
         return {
             'api_version': API_VERSION,
@@ -2913,7 +2824,6 @@ class CASSIETerminal:
         }
 
     def feature_flags(self):
-        
         checks = {
             'spoken_label': 'spoken_label',
             'spoken_parts': 'spoken_parts',
@@ -2932,7 +2842,6 @@ class CASSIETerminal:
         return flags
 
     def api_documentation(self):
-        
         return {
             'api_version': API_VERSION,
             'prefix': API_PREFIX,
@@ -2947,7 +2856,6 @@ class CASSIETerminal:
 _API_ROUTES = {}
 
 def api_route(rule, method='GET'):
-    
     def decorator(func):
         _API_ROUTES.setdefault(rule, []).append(method.upper())
         return route(API_PREFIX + rule, method=method)(func)
@@ -2974,7 +2882,6 @@ def api_error(message, code='bad_request', status=400, **extra):
     return json.dumps(payload, ensure_ascii=False)
 
 def api_payload():
-    
     raw = request.body.read()
     if not raw:
         return {}
@@ -2985,7 +2892,6 @@ def api_payload():
     return data if isinstance(data, dict) else None
 
 def api_guard():
-    
     expected = os.environ.get('CASSIE_API_KEY')
     if not expected:
         return None
@@ -2998,7 +2904,6 @@ cassie = CASSIETerminal()
 
 
 def safe_alarm_id(alarm_id):
-    """警报 ID 直接来自客户端，必须白名单校验，否则可以穿越到任意路径。"""
     alarm_id = (alarm_id or '').strip()
     if not re.fullmatch(r'[A-Za-z0-9_\-]{1,64}', alarm_id):
         return None
@@ -3073,7 +2978,6 @@ def load_alarm(alarm_id):
 
 
 def _api_ready():
-    
     return api_guard()
 
 @api_route('')
@@ -3203,12 +3107,6 @@ _API_FIELD_ALIASES = {
 
 
 def _api_collect_overrides(data):
-    """挑出可调参数，并把常见旧名映射到当前字段名。
-
-    早期版本用 enable_bell，现在叫 include_bell。以前静默丢弃未知字段，
-    于是前端发错名字时「勾了没反应、也不报错」，很难查——所以这里把旧名
-    映射掉，剩下的未知字段交给调用方报错。
-    """
     overrides = {}
     bad = []
     for key, value in data.items():
@@ -3279,13 +3177,6 @@ def apply_cors_headers():
 
 @hook('before_request')
 def cors_preflight():
-    """OPTIONS 预检在这里直接回掉。
-
-    不能写成 OPTIONS 路由：`/<path:path>` 那种模式会把任意路径都匹配上，
-    于是已经删掉的接口会返回 405（方法不允许）而不是 404（不存在），
-    看起来像「接口还在，只是方法不对」。钩子里抛 HTTPResponse 不注册路由，
-    所以其它路径该 404 还是 404。
-    """
     if request.method == 'OPTIONS':
         raise HTTPResponse(status=204, headers={
             'Access-Control-Allow-Origin': '*',
@@ -3310,6 +3201,6 @@ if __name__ == '__main__':
         print(tr('assets_missing_after'))
         print('=' * 68)
         print()
-        
+
     print(tr('startup_open_browser', port=port))
     run(host=API_HOST, port=port, server='cheroot', debug=False)

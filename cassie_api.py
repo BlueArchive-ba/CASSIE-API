@@ -103,9 +103,8 @@ PARAMETERS: Dict[str, str] = {
 
 class CassieError(Exception):
     pass
-    
+
 class CassieAPIError(CassieError):
-    
     def __init__(self, message: str, code: str = 'error', status: int = 0,
                  payload: Optional[dict] = None):
         super().__init__(message)
@@ -115,9 +114,8 @@ class CassieAPIError(CassieError):
 
 class CassieUnavailableError(CassieError):
     pass
-    
+
 def _translate_params(kwargs: Dict[str, Any]) -> Dict[str, Any]:
-    
     translated: Dict[str, Any] = {}
     for key, value in kwargs.items():
         if value is None:
@@ -126,7 +124,6 @@ def _translate_params(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     return translated
 
 class CassieClient:
-    
     def __init__(self, base_url: Optional[str] = None, *, terminal=None,
                  timeout: float = 120.0, api_key: Optional[str] = None):
         self.base_url = (base_url or DEFAULT_BASE_URL).rstrip('/')
@@ -137,7 +134,6 @@ class CassieClient:
 
     @classmethod
     def local(cls, **kwargs) -> 'CassieClient':
-        
         try:
             import cassie_play
         except ImportError as error:
@@ -154,7 +150,6 @@ class CassieClient:
 
     @classmethod
     def remote(cls, base_url: str = DEFAULT_BASE_URL, **kwargs) -> 'CassieClient':
-        
         return cls(base_url, **kwargs)
 
     def __enter__(self) -> 'CassieClient':
@@ -164,7 +159,6 @@ class CassieClient:
         self.close()
 
     def close(self) -> None:
-        
         if self._local and self._terminal is not None:
             try:
                 self._terminal.stop_playback()
@@ -220,19 +214,16 @@ class CassieClient:
         return parsed
 
     def health(self) -> Dict[str, Any]:
-        
         if self._local:
             return self._terminal.health()
         return self._request('GET', '/health')
 
     def api_documentation(self) -> Dict[str, Any]:
-        
         if self._local:
             return self._terminal.api_documentation()
         return self._request('GET', '/')
 
     def status(self) -> Dict[str, Any]:
-        
         if self._local:
             return {
                 'playing': bool(self._terminal.is_playing),
@@ -242,38 +233,32 @@ class CassieClient:
         return self._request('GET', '/status')
 
     def words(self) -> List[str]:
-        
         if self._local:
             return self._terminal.list_words()
         return self._request('GET', '/words')['words']
 
     def sounds(self) -> List[str]:
-        
         if self._local:
             return self._terminal.list_sounds()
         return self._request('GET', '/sounds')['sounds']
 
     def validate(self, text: str) -> Dict[str, Any]:
-        
         if self._local:
             return self._terminal.validate_text(text)
         return self._request('POST', '/validate', {'text': text})
 
     def plan(self, text: str, **params) -> Dict[str, Any]:
-        
         overrides = _translate_params(params)
         if self._local:
             return self._terminal.plan_broadcast(text, overrides)
         return self._request('POST', '/plan', {'text': text, **overrides})
 
     def settings(self) -> Dict[str, Any]:
-        
         if self._local:
             return self._terminal.snapshot_settings()
         return self._request('GET', '/settings')['settings']
 
     def update_settings(self, reset: bool = False, **params) -> Dict[str, Any]:
-        
         payload = _translate_params(params)
         if reset:
             payload['reset'] = True
@@ -292,7 +277,6 @@ class CassieClient:
 
 
     def play(self, text: str, **params) -> Dict[str, Any]:
-        
         overrides = _translate_params(params)
         if self._local:
             started, message = self._terminal.start_playback(text, overrides)
@@ -302,14 +286,12 @@ class CassieClient:
         return self._request('POST', '/play', {'text': text, **overrides})
 
     def stop(self) -> Dict[str, Any]:
-        
         if self._local:
             self._terminal.stop_playback()
             return {'playing': False, 'stop_requested': True}
         return self._request('POST', '/stop')
 
     def wait_until_done(self, timeout: float = 600.0, poll: float = 0.25) -> bool:
-        
         import time as _time
         deadline = _time.monotonic() + timeout
         while _time.monotonic() < deadline:
@@ -320,7 +302,6 @@ class CassieClient:
 
 
     def describe(self, text: str, **params) -> Dict[str, Any]:
-        
         plan = self.plan(text, **params)
         lines = [
             '文本: {}'.format(plan['text']),
@@ -335,4 +316,3 @@ class CassieClient:
                 event['index'], event['channel'], event['start_ms'],
                 event['duration_ms'], event['label']))
         return {'summary': '\n'.join(lines), 'plan': plan}
-
